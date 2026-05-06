@@ -143,6 +143,29 @@ class VisitaService {
     if (!v) throw new Error("Visita no encontrada o sin permisos");
     return v;
   }
+
+  async actualizarTareasPendientes({ id, rol, asesorCedula, tareasPendientes }) {
+    const query = { _id: id, isActive: true };
+    if (rol === "comercial") query["asesor.cedula"] = asesorCedula;
+
+    const safe = Array.isArray(tareasPendientes)
+      ? tareasPendientes
+          .filter((t) => t && typeof t === "object")
+          .map((t) => ({
+            texto: String(t.texto || "").trim(),
+            done: Boolean(t.done),
+          }))
+          .filter((t) => t.texto)
+      : [];
+
+    const v = await Visita.findOneAndUpdate(
+      query,
+      { $set: { "datosVisita.tareasPendientes": safe } },
+      { new: true }
+    ).lean();
+    if (!v) throw new Error("Visita no encontrada o sin permisos");
+    return v;
+  }
 }
 
 module.exports = new VisitaService();

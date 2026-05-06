@@ -12,8 +12,9 @@ function tokenHandler() {
 
       const payload = jwt.verify(authHeader, config.jwtSecret);
 
-      req.body = {
-        ...req.body,
+      // No mezclar identidad del asesor dentro de req.body: rutas como POST /clientes/:id/contactos
+      // envían `nombre` del contacto y quedaría sobrescrito por el nombre del JWT.
+      req.auth = {
         cedula: payload?.cedula,
         nombre: payload?.nombre,
         rol: payload?.rol,

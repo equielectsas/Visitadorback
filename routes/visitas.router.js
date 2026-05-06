@@ -21,9 +21,23 @@ router.get("/", tokenHandler(), async (req, res) => {
       clienteId,
     } = req.query;
 
+    // Solo "comercial" debe quedar acotado a su cédula cuando no hay filtro explícito.
+    // Admin/programador sin ?asesorCedula debe ver todas las visitas (antes se pasaba req.auth.cedula y se filtraba mal).
+    const rawAsesor = asesorCedula;
+    let filterAsesorCedula;
+    if (rawAsesor !== undefined && rawAsesor !== "" && rawAsesor !== null) {
+      const n = Number(rawAsesor);
+      filterAsesorCedula = Number.isFinite(n) ? n : undefined;
+    } else if (req.auth.rol === "comercial") {
+      const n = Number(req.auth.cedula);
+      filterAsesorCedula = Number.isFinite(n) ? n : undefined;
+    } else {
+      filterAsesorCedula = undefined;
+    }
+
     const resultado = await visitaService.listar({
-      rol: req.body.rol,
-      asesorCedula: asesorCedula ? Number(asesorCedula) : Number(req.body.cedula),
+      rol: req.auth.rol,
+      asesorCedula: filterAsesorCedula,
       estado,
       desde,
       hasta,
@@ -48,7 +62,7 @@ router.post("/", tokenHandler(), async (req, res) => {
     const { clienteId, clienteCrear, fecha, hora, estado } = req.body;
 
     const visita = await visitaService.crearVisita({
-      asesor: { cedula: req.body.cedula, nombre: req.body.nombre, rol: req.body.rol },
+      asesor: { cedula: req.auth.cedula, nombre: req.auth.nombre, rol: req.auth.rol },
       clienteId,
       clienteCrear,
       fecha,
@@ -69,8 +83,8 @@ router.patch("/:id/iniciar", tokenHandler(), async (req, res) => {
   try {
     const visita = await visitaService.iniciar({
       id: req.params.id,
-      rol: req.body.rol,
-      asesorCedula: Number(req.body.cedula),
+      rol: req.auth.rol,
+      asesorCedula: Number(req.auth.cedula),
     });
     return res.json(visita);
   } catch (error) {
@@ -86,8 +100,8 @@ router.patch("/:id/finalizar", tokenHandler(), async (req, res) => {
   try {
     const visita = await visitaService.finalizar({
       id: req.params.id,
-      rol: req.body.rol,
-      asesorCedula: Number(req.body.cedula),
+      rol: req.auth.rol,
+      asesorCedula: Number(req.auth.cedula),
       datosVisita: req.body.datosVisita,
       estadoFinal: req.body.estadoFinal || "realizada",
     });
@@ -105,11 +119,30 @@ router.patch("/:id/reprogramar", tokenHandler(), async (req, res) => {
   try {
     const visita = await visitaService.reprogramar({
       id: req.params.id,
-      rol: req.body.rol,
-      asesorCedula: Number(req.body.cedula),
+      rol: req.auth.rol,
+      asesorCedula: Number(req.auth.cedula),
       fecha: req.body.fecha,
       hora: req.body.hora,
       motivo: req.body.motivo,
+    });
+    return res.json(visita);
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// PATCH /api/visitas/:id/tareas
+// Body: { tareasPendientes: [{ texto, done }] }
+// Asesor: solo puede actualizar sus visitas. Admin: todas.
+// ══════════════════════════════════════════════════════════════════
+router.patch("/:id/tareas", tokenHandler(), async (req, res) => {
+  try {
+    const visita = await visitaService.actualizarTareasPendientes({
+      id: req.params.id,
+      rol: req.auth.rol,
+      asesorCedula: Number(req.auth.cedula),
+      tareasPendientes: req.body?.tareasPendientes,
     });
     return res.json(visita);
   } catch (error) {

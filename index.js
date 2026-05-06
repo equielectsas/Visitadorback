@@ -6,15 +6,17 @@ const { connect } = require("./db/mongoose");
 const clientesRouter = require("./routes/clientes.router");
 const authRouter = require("./routes/auth.router");
 const visitasRouter = require("./routes/visitas.router");
+const usuariosRouter = require("./routes/usuarios.router");
 const { iniciarCronSync } = require("./jobs/syncERP.job");
 
 const app = express();
 
 app.use(express.json());
 
+const corsOrigins = [process.env.FRONT_URL, process.env.CORS_FRONT].filter(Boolean);
 app.use(
   cors({
-    origin: process.env.FRONT_URL,
+    origin: corsOrigins.length ? corsOrigins : true,
     credentials: true,
   })
 );
@@ -23,6 +25,7 @@ app.use(
 app.use("/api/auth", authRouter);
 app.use("/api/clientes", clientesRouter);
 app.use("/api/visitas", visitasRouter);
+app.use("/api/usuarios", usuariosRouter);
 
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });

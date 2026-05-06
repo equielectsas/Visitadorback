@@ -181,7 +181,7 @@ router.get("/:id/contactos", tokenHandler(), async (req, res) => {
 
 router.post("/:id/contactos", tokenHandler(), async (req, res) => {
   try {
-    const { nombre, cargo, telefono, email, notas } = req.body || {};
+    const { nombre, cargo, profesion, telefono, email, notas } = req.body || {};
     if (!nombre?.trim()) return res.status(400).json({ message: "nombre es obligatorio" });
 
     const actualizado = await Cliente.findByIdAndUpdate(
@@ -191,6 +191,7 @@ router.post("/:id/contactos", tokenHandler(), async (req, res) => {
           contactos: {
             nombre: nombre.trim(),
             cargo,
+            profesion,
             telefono,
             email,
             notas,
@@ -211,7 +212,7 @@ router.post("/:id/contactos", tokenHandler(), async (req, res) => {
 
 router.patch("/:id/contactos/:contactoId", tokenHandler(), async (req, res) => {
   try {
-    const allowed = ["nombre", "cargo", "telefono", "email", "notas", "isActive"];
+    const allowed = ["nombre", "cargo", "profesion", "telefono", "email", "notas", "isActive"];
     const set = {};
     for (const k of allowed) {
       if (req.body?.[k] !== undefined) set[`contactos.$.${k}`] = req.body[k];
