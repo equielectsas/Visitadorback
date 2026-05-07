@@ -10,6 +10,15 @@ function buildScheduledAt(fecha, hora) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function fechaHoraLocalDesdeDate(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return { fecha: `${y}-${m}-${day}`, hora: `${hh}:${mm}` };
+}
+
 class VisitaService {
   async crearVisita({ asesor, clienteId, clienteCrear, fecha, hora, estado = "pendiente" }) {
     let finalClienteId = clienteId;
@@ -94,9 +103,24 @@ class VisitaService {
     return v;
   }
 
-  async finalizar({ id, rol, asesorCedula, datosVisita, estadoFinal = "realizada" }) {
+  async finalizar({
+    id,
+    rol,
+    asesorCedula,
+    datosVisita,
+    estadoFinal = "realizada",
+    fecha: fechaBody,
+    hora: horaBody,
+  }) {
     const query = { _id: id, isActive: true };
     if (rol === "comercial") query["asesor.cedula"] = asesorCedula;
+
+    const fallback = fechaHoraLocalDesdeDate(new Date());
+    const fecha =
+      typeof fechaBody === "string" && fechaBody.trim() ? fechaBody.trim() : fallback.fecha;
+    const hora =
+      typeof horaBody === "string" && horaBody.trim() ? horaBody.trim() : fallback.hora;
+    const scheduledAt = buildScheduledAt(fecha, hora);
 
     const v = await Visita.findOneAndUpdate(
       query,
@@ -104,6 +128,9 @@ class VisitaService {
         $set: {
           estado: estadoFinal,
           finishedAt: new Date(),
+          fecha,
+          hora,
+          ...(scheduledAt ? { scheduledAt } : {}),
           "datosVisita.nit": datosVisita?.nit,
           "datosVisita.nombreEmpresa": datosVisita?.nombreEmpresa,
           "datosVisita.direccionEmpresa": datosVisita?.direccionEmpresa,

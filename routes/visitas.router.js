@@ -94,7 +94,7 @@ router.patch("/:id/iniciar", tokenHandler(), async (req, res) => {
 
 // ══════════════════════════════════════════════════════════════════
 // PATCH /api/visitas/:id/finalizar
-// Body: { datosVisita, estadoFinal? }
+// Body: { datosVisita, estadoFinal?, fecha?, hora? } — fecha/hora del cierre (día en que se realizó); si no vienen, el servidor usa la hora actual.
 // ══════════════════════════════════════════════════════════════════
 router.patch("/:id/finalizar", tokenHandler(), async (req, res) => {
   try {
@@ -104,6 +104,8 @@ router.patch("/:id/finalizar", tokenHandler(), async (req, res) => {
       asesorCedula: Number(req.auth.cedula),
       datosVisita: req.body.datosVisita,
       estadoFinal: req.body.estadoFinal || "realizada",
+      fecha: req.body.fecha,
+      hora: req.body.hora,
     });
     return res.json(visita);
   } catch (error) {
