@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Cliente = require("../models/cliente.model");
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -395,6 +396,9 @@ class ClienteService {
    * Obtiene un cliente por ID.
    */
   async obtenerPorId(id) {
+    if (id == null || !mongoose.Types.ObjectId.isValid(String(id))) {
+      return null;
+    }
     return Cliente.findById(id).lean();
   }
 
@@ -453,6 +457,170 @@ class ClienteService {
   // ────────────────────────────────────────
   async desactivar(id) {
     return Cliente.findByIdAndUpdate(id, { isActive: false }, { new: true }).lean();
+  }
+
+  /**
+   * Empresas (clientes) que tienen contactos registrados (encargados).
+   * Vista administración: una fila por empresa con su lista de contactos.
+   */
+  async listarClientesConContactosAdmin({ search = "", page = 1, limit = 30 } = {}) {
+    const p = Math.max(1, parseInt(page, 10) || 1);
+    const l = Math.min(200, Math.max(1, parseInt(limit, 10) || 30));
+    const skip = (p - 1) * l;
+
+    const term = String(search || "").trim();
+    const rx = term ? new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") : null;
+
+    // Solo empresas con al menos 1 contacto activo
+    const query = {
+      isActive: true,
+      contactos: { $elemMatch: { isActive: { $ne: false } } },
+    };
+    if (rx) {
+      query.$or = [
+        { identificacion: rx },
+        { razonSocial: rx },
+        { nombrePunto: rx },
+        { ciudad: rx },
+        { contactos: { $elemMatch: { isActive: { $ne: false }, nombre: rx } } },
+        { contactos: { $elemMatch: { isActive: { $ne: false }, cargo: rx } } },
+        { contactos: { $elemMatch: { isActive: { $ne: false }, telefono: rx } } },
+        { contactos: { $elemMatch: { isActive: { $ne: false }, email: rx } } },
+      ];
+    }
+
+    const [total, docs] = await Promise.all([
+      Cliente.countDocuments(query),
+      Cliente.find(query)
+        .sort({ updatedAt: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(l)
+        .select("identificacion razonSocial nombrePunto ciudad direccion telefono contactos")
+        .lean(),
+    ]);
+
+    const items = (Array.isArray(docs) ? docs : []).map((c) => {
+      const contactos = Array.isArray(c.contactos)
+        ? c.contactos.filter((x) => x?.isActive !== false).map((x) => ({
+            id: String(x._id),
+            nombre: x.nombre,
+            cargo: x.cargo,
+            profesion: x.profesion,
+            telefono: x.telefono,
+            email: x.email,
+            notas: x.notas,
+            createdAt: x.createdAt,
+          }))
+        : [];
+
+      const empresaNombre = c.nombrePunto
+        ? `${c.razonSocial || ""} – ${c.nombrePunto}`.trim()
+        : (c.razonSocial || "").trim();
+
+      return {
+        clienteId: String(c._id),
+        empresaNit: c.identificacion || "",
+        empresaNombre: empresaNombre || `Cliente ${c.identificacion || ""}`.trim(),
+        empresaCiudad: c.ciudad || "",
+        empresaDireccion: c.direccion || "",
+        empresaTelefono: c.telefono || "",
+        contactos,
+      };
+    });
+
+    return { items, total, page: p, limit: l };
+  }
+
+  /**
+   * Personas vinculadas a empresas (contactos que guardan los asesores en cada cliente).
+   * Vista administración: una fila por persona con datos de la empresa.
+   */
+  async listarContactosPersonasAdmin({ search = "", page = 1, limit = 100 } = {}) {
+    const p = Math.max(1, parseInt(page, 10) || 1);
+    const l = Math.min(500, Math.max(1, parseInt(limit, 10) || 100));
+    const skip = (p - 1) * l;
+    const term = String(search || "").trim();
+
+    const stages = [
+      { $match: { isActive: true, "contactos.0": { $exists: true } } },
+      { $unwind: "$contactos" },
+      { $match: { "contactos.isActive": { $ne: false } } },
+      {
+        $addFields: {
+          _empresaNombreDisplay: {
+            $trim: {
+              input: {
+                $cond: [
+                  {
+                    $and: [
+                      { $ne: [{ $ifNull: ["$nombrePunto", ""] }, ""] },
+                    ],
+                  },
+                  {
+                    $concat: [
+                      { $ifNull: ["$razonSocial", ""] },
+                      " – ",
+                      { $ifNull: ["$nombrePunto", ""] },
+                    ],
+                  },
+                  { $ifNull: ["$razonSocial", ""] },
+                ],
+              },
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          contactoId: { $toString: "$contactos._id" },
+          clienteId: { $toString: "$_id" },
+          nombre: "$contactos.nombre",
+          cargo: "$contactos.cargo",
+          profesion: "$contactos.profesion",
+          telefono: "$contactos.telefono",
+          email: "$contactos.email",
+          notas: "$contactos.notas",
+          creadoEn: "$contactos.createdAt",
+          empresaNit: "$identificacion",
+          empresaNombre: "$_empresaNombreDisplay",
+          empresaCiudad: { $ifNull: ["$ciudad", ""] },
+        },
+      },
+    ];
+
+    if (term) {
+      const esc = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const rx = new RegExp(esc, "i");
+      stages.push({
+        $match: {
+          $or: [
+            { nombre: rx },
+            { cargo: rx },
+            { profesion: rx },
+            { telefono: rx },
+            { email: rx },
+            { empresaNit: rx },
+            { empresaNombre: rx },
+            { empresaCiudad: rx },
+            { notas: rx },
+          ],
+        },
+      });
+    }
+
+    stages.push({
+      $facet: {
+        total: [{ $count: "n" }],
+        items: [{ $sort: { creadoEn: -1 } }, { $skip: skip }, { $limit: l }],
+      },
+    });
+
+    const [agg] = await Cliente.aggregate(stages);
+    const total = agg?.total?.[0]?.n ?? 0;
+    const items = Array.isArray(agg?.items) ? agg.items : [];
+
+    return { items, total, page: p, limit: l };
   }
 }
 

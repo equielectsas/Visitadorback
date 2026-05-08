@@ -8,7 +8,7 @@ const router = express.Router();
 // GET /api/usuarios — listado sin contraseña (solo admins)
 router.get("/", tokenHandler(), requireAdmin(), async (req, res) => {
   try {
-    const usuarios = await Usuario.find({})
+    const usuarios = await Usuario.find({ rol: { $in: ["adminComercial", "comercial"] } })
       .select("cedula nombre rol")
       .sort({ nombre: 1 })
       .lean();

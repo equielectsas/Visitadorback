@@ -5,6 +5,7 @@ const fetch = (...args) =>
 
 const authSafixHandler = require("../middlewares/authSafix.handler");
 const tokenHandler = require("../middlewares/token.handler");
+const requireAdmin = require("../middlewares/admin.handler");
 const clienteService = require("../services/cliente.service");
 const Cliente = require("../models/cliente.model");
 
@@ -50,6 +51,47 @@ router.get("/", tokenHandler(), async (req, res) => {
   } catch (error) {
     console.error("❌ Error listando clientes:", error.message);
     return res.status(500).json({ message: "Error al listar clientes" });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// GET /api/clientes/admin/contactos-encargados
+// Dos segmentos: evita que /:id interprete "contactos-encargados" como ObjectId.
+// Personas (encargados) guardadas por asesores en cada empresa — solo admin
+// Query: search, page, limit
+// ══════════════════════════════════════════════════════════════════
+router.get("/admin/contactos-encargados", tokenHandler(), requireAdmin(), async (req, res) => {
+  try {
+    const { search = "", page = 1, limit = 100 } = req.query;
+    const out = await clienteService.listarContactosPersonasAdmin({
+      search,
+      page,
+      limit,
+    });
+    return res.json(out);
+  } catch (error) {
+    console.error("❌ Error listando contactos encargados:", error.message);
+    return res.status(500).json({ message: error.message || "Error al listar contactos" });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// GET /api/clientes/admin/con-contactos
+// Empresas (clientes) que tienen contactos guardados — solo admin
+// Query: search, page, limit
+// ══════════════════════════════════════════════════════════════════
+router.get("/admin/con-contactos", tokenHandler(), requireAdmin(), async (req, res) => {
+  try {
+    const { search = "", page = 1, limit = 30 } = req.query;
+    const out = await clienteService.listarClientesConContactosAdmin({
+      search,
+      page,
+      limit,
+    });
+    return res.json(out);
+  } catch (error) {
+    console.error("❌ Error listando clientes con contactos:", error.message);
+    return res.status(500).json({ message: error.message || "Error al listar clientes con contactos" });
   }
 });
 

@@ -7,6 +7,8 @@ const clientesRouter = require("./routes/clientes.router");
 const authRouter = require("./routes/auth.router");
 const visitasRouter = require("./routes/visitas.router");
 const usuariosRouter = require("./routes/usuarios.router");
+const notificacionesRouter = require("./routes/notificaciones.router");
+const alertasTareasRouter = require("./routes/alertasTareas.router");
 const { iniciarCronSync } = require("./jobs/syncERP.job");
 
 const app = express();
@@ -26,6 +28,8 @@ app.use("/api/auth", authRouter);
 app.use("/api/clientes", clientesRouter);
 app.use("/api/visitas", visitasRouter);
 app.use("/api/usuarios", usuariosRouter);
+app.use("/api/notificaciones", notificacionesRouter);
+app.use("/api/alertas-tareas", alertasTareasRouter);
 
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });

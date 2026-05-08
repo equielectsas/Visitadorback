@@ -6,6 +6,8 @@ const usuarioSchema = new mongoose.Schema(
     nombre: { type: String },
     password: { type: String },
     rol: { type: String },
+    /** Cuando el asesor confirmó "Lo haré!" (para no preguntar en cada login). */
+    pendingTasksAckAt: { type: Date, default: null },
   },
   {
     collection: "usuario",
