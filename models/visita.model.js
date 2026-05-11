@@ -4,6 +4,8 @@ const tareaSchema = new mongoose.Schema(
   {
     texto: { type: String, trim: true, required: true },
     done: { type: Boolean, default: false },
+    /** Fecha en que el asesor marcó la tarea como hecha (solo rol comercial al guardar). */
+    marcadaPorAsesorAt: { type: Date },
   },
   { _id: false }
 );

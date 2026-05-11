@@ -135,7 +135,7 @@ router.patch("/:id/reprogramar", tokenHandler(), async (req, res) => {
 
 // ══════════════════════════════════════════════════════════════════
 // PATCH /api/visitas/:id/tareas
-// Body: { tareasPendientes: [{ texto, done }] }
+// Body: { tareasPendientes: [{ texto, done, marcadaPorAsesorAt? }] }
 // Asesor: solo puede actualizar sus visitas. Admin: todas.
 // ══════════════════════════════════════════════════════════════════
 router.patch("/:id/tareas", tokenHandler(), async (req, res) => {

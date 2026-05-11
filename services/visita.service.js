@@ -175,13 +175,28 @@ class VisitaService {
     const query = { _id: id, isActive: true };
     if (rol === "comercial") query["asesor.cedula"] = asesorCedula;
 
+    const existing = await Visita.findOne(query).lean();
+    if (!existing) throw new Error("Visita no encontrada o sin permisos");
+    const prevTasks = Array.isArray(existing.datosVisita?.tareasPendientes)
+      ? existing.datosVisita.tareasPendientes
+      : [];
+
     const safe = Array.isArray(tareasPendientes)
       ? tareasPendientes
           .filter((t) => t && typeof t === "object")
-          .map((t) => ({
-            texto: String(t.texto || "").trim(),
-            done: Boolean(t.done),
-          }))
+          .map((t, i) => {
+            const texto = String(t.texto || "").trim();
+            const done = Boolean(t.done);
+            const prev = prevTasks[i] || {};
+            let marcadaPorAsesorAt = prev.marcadaPorAsesorAt || null;
+            if (rol === "comercial") {
+              if (done && !prev.done) marcadaPorAsesorAt = new Date();
+              if (!done) marcadaPorAsesorAt = null;
+            }
+            const item = { texto, done };
+            if (marcadaPorAsesorAt) item.marcadaPorAsesorAt = marcadaPorAsesorAt;
+            return item;
+          })
           .filter((t) => t.texto)
       : [];
 
