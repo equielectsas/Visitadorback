@@ -77,6 +77,47 @@ router.post("/", tokenHandler(), async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════════
+// PATCH /api/visitas/:id
+// Edita fecha/hora/empresa/datos de visita.
+// Asesor: solo sus visitas y no realizadas. Admin: cualquier estado.
+// ══════════════════════════════════════════════════════════════════
+router.patch("/:id", tokenHandler(), async (req, res) => {
+  try {
+    const visita = await visitaService.editar({
+      id: req.params.id,
+      rol: req.auth.rol,
+      asesorCedula: Number(req.auth.cedula),
+      fecha: req.body.fecha,
+      hora: req.body.hora,
+      clienteId: req.body.clienteId,
+      clienteCrear: req.body.clienteCrear,
+      datosVisita: req.body.datosVisita,
+      motivo: req.body.motivo,
+    });
+    return res.json(visita);
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// DELETE /api/visitas/:id
+// Soft delete. Visita realizada: solo admin. No realizada: usuario con acceso.
+// ══════════════════════════════════════════════════════════════════
+router.delete("/:id", tokenHandler(), async (req, res) => {
+  try {
+    const visita = await visitaService.eliminar({
+      id: req.params.id,
+      rol: req.auth.rol,
+      asesorCedula: Number(req.auth.cedula),
+    });
+    return res.json({ message: "Visita eliminada", visita });
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
 // PATCH /api/visitas/:id/iniciar
 // ══════════════════════════════════════════════════════════════════
 router.patch("/:id/iniciar", tokenHandler(), async (req, res) => {
@@ -126,6 +167,9 @@ router.patch("/:id/reprogramar", tokenHandler(), async (req, res) => {
       fecha: req.body.fecha,
       hora: req.body.hora,
       motivo: req.body.motivo,
+      clienteId: req.body.clienteId,
+      clienteCrear: req.body.clienteCrear,
+      datosVisita: req.body.datosVisita,
     });
     return res.json(visita);
   } catch (error) {

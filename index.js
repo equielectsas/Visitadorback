@@ -1,5 +1,6 @@
 require("dotenv").config();
 
+const dns = require("dns");
 const express = require("express");
 const cors = require("cors");
 const { connect } = require("./db/mongoose");
@@ -10,6 +11,14 @@ const usuariosRouter = require("./routes/usuarios.router");
 const notificacionesRouter = require("./routes/notificaciones.router");
 const alertasTareasRouter = require("./routes/alertasTareas.router");
 const { iniciarCronSync } = require("./jobs/syncERP.job");
+
+// Node usa su propio resolver para mongodb+srv; en algunas redes el DNS local rechaza SRV.
+dns.setServers(
+  String(process.env.DNS_SERVERS || "8.8.8.8,1.1.1.1")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+);
 
 const app = express();
 

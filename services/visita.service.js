@@ -19,7 +19,48 @@ function fechaHoraLocalDesdeDate(d = new Date()) {
   return { fecha: `${y}-${m}-${day}`, hora: `${hh}:${mm}` };
 }
 
+function isAdminRole(rol) {
+  return rol === "adminPlataforma" || rol === "adminComercial";
+}
+
+function applyAuthScope(query, rol, asesorCedula) {
+  if (rol === "comercial") query["asesor.cedula"] = asesorCedula;
+  return query;
+}
+
+function pickDefined(obj) {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
+}
+
 class VisitaService {
+  async buildClientePatch({ clienteId, clienteCrear, datosVisita = {} } = {}) {
+    let finalClienteId = clienteId;
+    if (!finalClienteId && clienteCrear) {
+      const nuevo = await clienteService.crearClienteManual(clienteCrear);
+      finalClienteId = nuevo._id;
+    }
+    if (!finalClienteId) return {};
+
+    const cliente = await Cliente.findById(finalClienteId)
+      .select("_id identificacion razonSocial nombrePunto direccion ciudad telefono")
+      .lean();
+    if (!cliente) throw new Error("Cliente no encontrado");
+
+    const nombreEmpresa =
+      datosVisita.nombreEmpresa ||
+      (cliente.nombrePunto
+        ? `${cliente.razonSocial || ""} - ${cliente.nombrePunto}`.trim()
+        : cliente.razonSocial);
+
+    return pickDefined({
+      clienteId: finalClienteId,
+      "datosVisita.nit": datosVisita.nit ?? cliente.identificacion,
+      "datosVisita.nombreEmpresa": nombreEmpresa || `Cliente ${cliente.identificacion || ""}`.trim(),
+      "datosVisita.direccionEmpresa": datosVisita.direccionEmpresa ?? cliente.direccion,
+      "datosVisita.municipio": datosVisita.municipio ?? cliente.ciudad,
+    });
+  }
+
   async crearVisita({ asesor, clienteId, clienteCrear, fecha, hora, estado = "pendiente" }) {
     let finalClienteId = clienteId;
 
@@ -150,21 +191,91 @@ class VisitaService {
     return v;
   }
 
-  async reprogramar({ id, rol, asesorCedula, fecha, hora, motivo }) {
+  async reprogramar({ id, rol, asesorCedula, fecha, hora, motivo, clienteId, clienteCrear, datosVisita = {} }) {
     const query = { _id: id, isActive: true };
     if (rol === "comercial") query["asesor.cedula"] = asesorCedula;
+
+    const existing = await Visita.findOne(query).lean();
+    if (!existing) throw new Error("Visita no encontrada o sin permisos");
+    if (existing.estado === "realizada" && !isAdminRole(rol)) {
+      throw new Error("Solo un administrador puede reprogramar una visita realizada");
+    }
+
+    const clientePatch = await this.buildClientePatch({ clienteId, clienteCrear, datosVisita });
+    const nextFecha = typeof fecha === "string" && fecha.trim() ? fecha.trim() : existing.fecha;
+    const nextHora = typeof hora === "string" && hora.trim() ? hora.trim() : existing.hora;
+    const scheduledAt = buildScheduledAt(nextFecha, nextHora);
 
     const v = await Visita.findOneAndUpdate(
       query,
       {
-        $set: {
-          estado: "reprogramada",
-          fecha,
-          hora,
-          scheduledAt: buildScheduledAt(fecha, hora),
+        $set: pickDefined({
+          estado: existing.estado === "realizada" ? existing.estado : "reprogramada",
+          fecha: nextFecha,
+          hora: nextHora,
+          ...(scheduledAt ? { scheduledAt } : {}),
           motivoReprogramacion: motivo || "",
-        },
+          "datosVisita.nit": datosVisita.nit,
+          "datosVisita.nombreEmpresa": datosVisita.nombreEmpresa,
+          "datosVisita.direccionEmpresa": datosVisita.direccionEmpresa,
+          "datosVisita.municipio": datosVisita.municipio,
+          ...clientePatch,
+        }),
       },
+      { new: true }
+    ).lean();
+    if (!v) throw new Error("Visita no encontrada o sin permisos");
+    return v;
+  }
+
+  async editar({ id, rol, asesorCedula, fecha, hora, clienteId, clienteCrear, datosVisita = {}, motivo }) {
+    const query = applyAuthScope({ _id: id, isActive: true }, rol, asesorCedula);
+    const existing = await Visita.findOne(query).lean();
+    if (!existing) throw new Error("Visita no encontrada o sin permisos");
+    if (existing.estado === "realizada" && !isAdminRole(rol)) {
+      throw new Error("Solo un administrador puede editar una visita realizada");
+    }
+
+    const nextFecha = typeof fecha === "string" && fecha.trim() ? fecha.trim() : existing.fecha;
+    const nextHora = typeof hora === "string" && hora.trim() ? hora.trim() : existing.hora;
+    const scheduledAt = buildScheduledAt(nextFecha, nextHora);
+
+    const set = pickDefined({
+      fecha: nextFecha,
+      hora: nextHora,
+      ...(scheduledAt ? { scheduledAt } : {}),
+      ...(motivo !== undefined ? { motivoReprogramacion: motivo || "" } : {}),
+      "datosVisita.nit": datosVisita.nit,
+      "datosVisita.nombreEmpresa": datosVisita.nombreEmpresa,
+      "datosVisita.direccionEmpresa": datosVisita.direccionEmpresa,
+      "datosVisita.municipio": datosVisita.municipio,
+      "datosVisita.tipoVisita": datosVisita.tipoVisita,
+      "datosVisita.tipoVehiculo": datosVisita.tipoVehiculo,
+      "datosVisita.nombreEncargado": datosVisita.nombreEncargado,
+      "datosVisita.cargoEncargado": datosVisita.cargoEncargado,
+      "datosVisita.observaciones": datosVisita.observaciones,
+      "datosVisita.geoCoords": datosVisita.geoCoords,
+      "datosVisita.tareasPendientes": Array.isArray(datosVisita.tareasPendientes) ? datosVisita.tareasPendientes : undefined,
+    });
+
+    const clientePatch = await this.buildClientePatch({ clienteId, clienteCrear, datosVisita });
+    Object.assign(set, clientePatch);
+
+    const v = await Visita.findOneAndUpdate(query, { $set: set }, { new: true }).lean();
+    if (!v) throw new Error("Visita no encontrada o sin permisos");
+    return v;
+  }
+
+  async eliminar({ id, rol, asesorCedula }) {
+    const query = applyAuthScope({ _id: id, isActive: true }, rol, asesorCedula);
+    const existing = await Visita.findOne(query).lean();
+    if (!existing) throw new Error("Visita no encontrada o sin permisos");
+    if (existing.estado === "realizada" && !isAdminRole(rol)) {
+      throw new Error("Solo un administrador puede eliminar una visita realizada");
+    }
+    const v = await Visita.findOneAndUpdate(
+      query,
+      { $set: { isActive: false } },
       { new: true }
     ).lean();
     if (!v) throw new Error("Visita no encontrada o sin permisos");
