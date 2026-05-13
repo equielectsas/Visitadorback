@@ -96,6 +96,26 @@ router.get("/admin/con-contactos", tokenHandler(), requireAdmin(), async (req, r
 });
 
 // ══════════════════════════════════════════════════════════════════
+// GET /api/clientes/con-contactos
+// Empresas con contactos guardados — usuarios autenticados (asesores/admin)
+// Query: search, page, limit
+// ══════════════════════════════════════════════════════════════════
+router.get("/con-contactos", tokenHandler(), async (req, res) => {
+  try {
+    const { search = "", page = 1, limit = 30 } = req.query;
+    const out = await clienteService.listarClientesConContactosAdmin({
+      search,
+      page,
+      limit,
+    });
+    return res.json(out);
+  } catch (error) {
+    console.error("❌ Error listando clientes con contactos:", error.message);
+    return res.status(500).json({ message: error.message || "Error al listar clientes con contactos" });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
 // GET /api/clientes/sync/status
 // Estado de sincronización + stats para dashboard
 // ══════════════════════════════════════════════════════════════════
