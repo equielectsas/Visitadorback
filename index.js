@@ -10,6 +10,7 @@ const visitasRouter = require("./routes/visitas.router");
 const usuariosRouter = require("./routes/usuarios.router");
 const notificacionesRouter = require("./routes/notificaciones.router");
 const alertasTareasRouter = require("./routes/alertasTareas.router");
+const contactosMigradosRouter = require("./routes/contactosMigrados.router");
 const { iniciarCronSync } = require("./jobs/syncERP.job");
 
 // Node usa su propio resolver para mongodb+srv; en algunas redes el DNS local rechaza SRV.
@@ -39,6 +40,7 @@ app.use("/api/visitas", visitasRouter);
 app.use("/api/usuarios", usuariosRouter);
 app.use("/api/notificaciones", notificacionesRouter);
 app.use("/api/alertas-tareas", alertasTareasRouter);
+app.use("/api/contactos-migrados", contactosMigradosRouter);
 
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
